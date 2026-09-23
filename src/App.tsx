@@ -48,6 +48,9 @@ export default function App() {
   const [activeEnsemble, setActiveEnsemble] = useState<Ensemble | null>(null)
   const [isAppLoading, setIsAppLoading] = useState(true)
 
+  // NEW: Navigation State
+  const [activeTab, setActiveTab] = useState<'ensembles' | 'music'>('ensembles')
+
   // Modal States
   const [isEnsModalOpen, setIsEnsModalOpen] = useState(false)
   const [isRosterOpen, setIsRosterOpen] = useState(false)
@@ -333,40 +336,58 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-indigo-500/30">
       
-      {/* Top Navbar */}
+      {/* --- UPDATED NAVBAR WITH TABS --- */}
       <nav className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-6">
+        
+        {/* Left Side: Logo and Ensemble Tools */}
+        <div className="flex items-center gap-6 w-1/3">
           <h1 className="text-xl font-black text-white tracking-tight">Marked</h1>
           
-          <div className="hidden md:flex items-center gap-2">
-            <select 
-              value={activeEnsemble?.id || ''} 
-              onChange={e => setActiveEnsemble(ensembles.find(x => x.id === e.target.value) || null)} 
-              className="bg-slate-950 border border-slate-700 text-sm rounded-xl px-4 py-2 font-semibold text-slate-200 outline-none focus:border-indigo-500 transition cursor-pointer"
-            >
-              <option value="" disabled>Select Ensemble...</option>
-              {ensembles.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-            <button onClick={() => setIsEnsModalOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition cursor-pointer" title="Join or Create Group">
-              +
-            </button>
-          </div>
+          {activeTab === 'ensembles' && (
+            <div className="hidden md:flex items-center gap-2">
+              <select 
+                value={activeEnsemble?.id || ''} 
+                onChange={e => setActiveEnsemble(ensembles.find(x => x.id === e.target.value) || null)} 
+                className="bg-slate-950 border border-slate-700 text-sm rounded-xl px-4 py-2 font-semibold text-slate-200 outline-none focus:border-indigo-500 transition cursor-pointer"
+              >
+                <option value="" disabled>Select Ensemble...</option>
+                {ensembles.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              <button onClick={() => setIsEnsModalOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition cursor-pointer" title="Join or Create Group">
+                +
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Center: New Tab Switcher */}
+        <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 shadow-inner">
+          <button 
+            onClick={() => setActiveTab('ensembles')} 
+            className={`px-5 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
+              activeTab === 'ensembles' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            Ensembles
+          </button>
+          <button 
+            onClick={() => setActiveTab('music')} 
+            className={`px-5 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
+              activeTab === 'music' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            Music & Tools
+          </button>
         </div>
         
-        <div className="flex items-center gap-4">
-          <button onClick={() => setIsMetronomeOpen(true)} className="hidden md:flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-medium transition cursor-pointer border border-slate-700">
-            ⏱ Metronome
-          </button>
-          
-          <button onClick={() => setIsTunerOpen(true)} className="hidden md:flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-medium transition cursor-pointer border border-slate-700">
-            🪕 Tuner
-          </button>
-          
-          {activeEnsemble && (
+        {/* Right Side: Profile & Utilities */}
+        <div className="flex items-center justify-end gap-4 w-1/3">
+          {activeTab === 'ensembles' && activeEnsemble && (
             <button onClick={() => setIsRosterOpen(true)} className="hidden md:flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-medium transition cursor-pointer border border-slate-700">
               👥 Roster
             </button>
           )}
+          
           <div className="h-6 w-px bg-slate-800 mx-1 hidden md:block"></div>
           
           <span className="text-sm font-medium text-slate-400 hidden sm:block">
@@ -383,16 +404,49 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main Content Area */}
-      <EnsemblesView 
-        user={session} 
-        profile={profile} 
-        ensembles={ensembles} 
-        activeEnsemble={activeEnsemble} 
-        setActiveEnsemble={setActiveEnsemble} 
-        onOpenEnsModal={() => setIsEnsModalOpen(true)} 
-        onOpenRoster={() => setIsRosterOpen(true)} 
-      />
+      {/* --- UPDATED MAIN CONTENT SWITCHER --- */}
+      <div className="flex-1 overflow-auto">
+        {activeTab === 'ensembles' ? (
+          <EnsemblesView 
+            user={session} 
+            profile={profile} 
+            ensembles={ensembles} 
+            activeEnsemble={activeEnsemble} 
+            setActiveEnsemble={setActiveEnsemble} 
+            onOpenEnsModal={() => setIsEnsModalOpen(true)} 
+            onOpenRoster={() => setIsRosterOpen(true)} 
+          />
+        ) : (
+          <div className="max-w-6xl mx-auto w-full p-8 animate-in fade-in duration-300">
+            <h2 className="text-3xl font-black text-white mb-2">Practice Room</h2>
+            <p className="text-slate-400 mb-8">Your personal workspace for individual practice.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <button 
+                onClick={() => setIsMetronomeOpen(true)} 
+                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-left hover:border-indigo-500 transition group cursor-pointer shadow-lg hover:shadow-indigo-500/10"
+              >
+                <div className="text-5xl mb-6 group-hover:scale-110 group-hover:-rotate-3 transition-transform origin-bottom-left inline-block">⏱</div>
+                <h3 className="text-2xl font-bold text-white mb-3">Metronome</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  A high-precision visual and audio metronome. Tap to set tempo, customize time signatures, and keep perfect rhythm.
+                </p>
+              </button>
+
+              <button 
+                onClick={() => setIsTunerOpen(true)} 
+                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-left hover:border-emerald-500 transition group cursor-pointer shadow-lg hover:shadow-emerald-500/10"
+              >
+                <div className="text-5xl mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform origin-bottom-left inline-block">🪕</div>
+                <h3 className="text-2xl font-bold text-white mb-3">Chromatic Tuner</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Real-time microphone analysis with a digital needle. Ensure your instrument is perfectly in tune before rehearsal.
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* MODAL: Join or Create Ensemble */}
       {isEnsModalOpen && (
