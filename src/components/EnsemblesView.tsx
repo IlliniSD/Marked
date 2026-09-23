@@ -86,7 +86,6 @@ export default function EnsemblesView({
     supabase.from('piece_parts').select('*').eq('ensemble_id', activeEnsemble.id).then(({ data }) => setParts(data || []))
     supabase.from('section_leaders').select('*').eq('ensemble_id', activeEnsemble.id).then(({ data }) => setSectionLeaders(data || []))
 
-    // FIX: Safely fetch and merge roster
     const fetchRoster = async () => {
       const { data: mems } = await supabase.from('ensemble_members').select('user_id, role').eq('ensemble_id', activeEnsemble.id)
       const { data: profs } = await supabase.from('profiles').select('id, first_name, last_name')
@@ -110,7 +109,6 @@ export default function EnsemblesView({
     }
   }, [activeEnsemble, ensembleTab])
 
-  // Automatically select the first available instrument for the section leader dropdown
   useEffect(() => {
     if (selectedPieceForParts) {
       const pieceParts = parts.filter(pt => pt.piece_id === selectedPieceForParts.id)
@@ -122,7 +120,6 @@ export default function EnsemblesView({
   }, [selectedPieceForParts, parts])
 
   // --- PIECE CRUD OPERATIONS --- //
-
   const handleAddPiece = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!activeEnsemble) return
@@ -181,7 +178,6 @@ export default function EnsemblesView({
   }
 
   // --- PART UPLOADS --- //
-
   const handleUploadPart = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!activeEnsemble || !selectedPieceForParts || !partPdfFile) return
@@ -220,7 +216,7 @@ export default function EnsemblesView({
     if (error) alert(error.message)
     if (data) { 
       setSectionLeaders([...sectionLeaders, data])
-      setNewLeaderUser('') // Reset dropdown after success
+      setNewLeaderUser('')
     }
   }
 
@@ -229,9 +225,7 @@ export default function EnsemblesView({
     if (!error) setSectionLeaders(sectionLeaders.filter(l => l.id !== id))
   }
 
-
   // --- ANNOUNCEMENTS & SETTINGS --- //
-
   const handleAddAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile || !activeEnsemble) return
@@ -262,7 +256,6 @@ export default function EnsemblesView({
 
   const isDirector = activeEnsemble.role === 'director'
   
-  // Notice we now check piece_id as well as instrument!
   const isLeaderForViewingPart = viewingScore ? sectionLeaders.some(l => 
     l.user_id === user.id && 
     l.piece_id === viewingScore.piece_id &&
@@ -273,7 +266,6 @@ export default function EnsemblesView({
   // @ts-ignore
   const visiblePieces = pieces.filter(p => (!!p.is_archived) === showArchived)
 
-  // Helper variables for the open Parts Modal
   const currentPieceParts = selectedPieceForParts ? parts.filter(pt => pt.piece_id === selectedPieceForParts.id) : []
   const availableInstrumentsForSelectedPiece = Array.from(new Set(currentPieceParts.map(p => p.instrument)))
 
@@ -532,10 +524,15 @@ export default function EnsemblesView({
                         {roster.filter(r => r.role === 'member').map(r => <option key={r.user_id} value={r.user_id}>{r.name}</option>)}
                       </select>
                       
+                      {/* FIX: Look up the custom name for the assignment dropdown */}
                       <select value={newLeaderInst} onChange={e => setNewLeaderInst(e.target.value)} required className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
-                        {availableInstrumentsForSelectedPiece.map(inst => (
-                          <option key={inst} value={inst}>{COMMON_INSTRUMENTS.find(i=>i.id===inst)?.name || inst}</option>
-                        ))}
+                        {availableInstrumentsForSelectedPiece.map(inst => {
+                          const matchingPart = currentPieceParts.find(p => p.instrument === inst);
+                          const displayLabel = matchingPart?.name || COMMON_INSTRUMENTS.find(i=>i.id===inst)?.name || inst;
+                          return (
+                            <option key={inst} value={inst}>{displayLabel}</option>
+                          )
+                        })}
                       </select>
                       <button type="submit" className="px-6 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-bold transition cursor-pointer">Assign</button>
                     </form>
@@ -545,12 +542,18 @@ export default function EnsemblesView({
                   <div className="mt-4 space-y-2">
                     {sectionLeaders.filter(l => l.piece_id === selectedPieceForParts.id).map(leader => {
                       const r = roster.find(x => x.user_id === leader.user_id)
-                      const i = COMMON_INSTRUMENTS.find(x => x.id === leader.instrument)
+                      
+                      {/* FIX: Look up the custom name for the active leaders list */}
+                      const assignedPart = currentPieceParts.find(pt => pt.instrument === leader.instrument);
+                      const displayLabel = assignedPart?.name || COMMON_INSTRUMENTS.find(x => x.id === leader.instrument)?.name || leader.instrument;
+                      
                       return (
                         <div key={leader.id} className="flex justify-between items-center px-4 py-2 bg-slate-950/50 rounded-lg border border-slate-800/80">
                           <div className="flex gap-3 items-center">
                             <span className="text-sm font-bold text-white">{r?.name || 'Loading...'}</span>
-                            <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">{i?.name || leader.instrument}</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">
+                              {displayLabel}
+                            </span>
                           </div>
                           <button onClick={() => handleRemoveSectionLeader(leader.id)} className="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 transition cursor-pointer">Remove</button>
                         </div>
