@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import type { Ensemble, Piece, PiecePart, Announcement, AnnouncementReply, Profile } from '../types'
 import { formatDateTime } from '../utils'
 import ScoreViewer from './ScoreViewer'
+import InventoryView from './InventoryView'
 
 interface EnsemblesViewProps {
   user: User
@@ -38,7 +39,7 @@ const COMMON_INSTRUMENTS = [
 export default function EnsemblesView({ 
   user, profile, ensembles, activeEnsemble, setActiveEnsemble, onOpenEnsModal, onOpenRoster 
 }: EnsemblesViewProps) {
-  const [ensembleTab, setEnsembleTab] = useState<'repertoire' | 'announcements' | 'ensemble_settings'>('repertoire')
+  const [ensembleTab, setEnsembleTab] = useState<'repertoire' | 'announcements' | 'ensemble_settings' | 'inventory'>('repertoire')
   
   const [pieces, setPieces] = useState<Piece[]>([])
   const [parts, setParts] = useState<PiecePart[]>([])
@@ -283,6 +284,7 @@ export default function EnsemblesView({
           <div className="flex items-center gap-8 px-2">
             <button onClick={() => setEnsembleTab('repertoire')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'repertoire' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Repertoire</button>
             <button onClick={() => setEnsembleTab('announcements')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'announcements' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Announcements</button>
+            <button onClick={() => setEnsembleTab('inventory')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'inventory' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Inventory</button>
             {activeEnsemble.role === 'director' && (
               <button onClick={() => setEnsembleTab('ensemble_settings')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'ensemble_settings' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Director Controls</button>
             )}
@@ -400,6 +402,15 @@ export default function EnsemblesView({
               ))}
             </div>
           </div>
+        )}
+
+        {ensembleTab === 'inventory' && (
+          <InventoryView 
+            ensembleId={activeEnsemble.id}
+            isDirector={activeEnsemble.role === 'director'}
+            currentUserId={user.id}
+            roster={roster}
+          />
         )}
 
         {ensembleTab === 'ensemble_settings' && activeEnsemble.role === 'director' && (
@@ -524,7 +535,6 @@ export default function EnsemblesView({
                         {roster.filter(r => r.role === 'member').map(r => <option key={r.user_id} value={r.user_id}>{r.name}</option>)}
                       </select>
                       
-                      {/* FIX: Look up the custom name for the assignment dropdown */}
                       <select value={newLeaderInst} onChange={e => setNewLeaderInst(e.target.value)} required className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
                         {availableInstrumentsForSelectedPiece.map(inst => {
                           const matchingPart = currentPieceParts.find(p => p.instrument === inst);
@@ -542,8 +552,6 @@ export default function EnsemblesView({
                   <div className="mt-4 space-y-2">
                     {sectionLeaders.filter(l => l.piece_id === selectedPieceForParts.id).map(leader => {
                       const r = roster.find(x => x.user_id === leader.user_id)
-                      
-                      {/* FIX: Look up the custom name for the active leaders list */}
                       const assignedPart = currentPieceParts.find(pt => pt.instrument === leader.instrument);
                       const displayLabel = assignedPart?.name || COMMON_INSTRUMENTS.find(x => x.id === leader.instrument)?.name || leader.instrument;
                       

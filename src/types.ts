@@ -99,3 +99,43 @@ export interface Profile {
   instrument: string;
   // (keep any other properties you might already have here)
 }
+
+
+
+export interface InventoryItem {
+  id: string;
+  ensemble_id: string;
+  item_type: string;
+  name: string;
+  assigned_to?: string | null;
+  condition_notes?: string;
+  created_at: string;
+}
+
+export interface Assignment {
+  id: string;
+  ensemble_id: string;
+  title: string;
+  instructions?: string;
+  due_date?: string;
+  created_at: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignment_id: string;
+  user_id: string;
+  audio_url: string;
+  teacher_notes?: string;
+  submitted_at: string;
+}
+
+export interface SectionalReport {
+  id: string;
+  ensemble_id: string;
+  leader_id: string;
+  title: string;
+  attendance_notes?: string;
+  rehearsal_notes?: string;
+  created_at: string;
+}
