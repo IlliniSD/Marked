@@ -6,7 +6,7 @@ import type { Ensemble, Profile } from './types'
 // Components
 import EnsemblesView from './components/EnsemblesView'
 import RosterModal from './components/RosterModal'
-import ProfileSettingsModal from './components/ProfileSettingsModal'
+import ProfileSettingsView from './components/ProfileSettingsView'
 import TunerModal from './components/TunerModal'
 import MetronomeModal from './components/MetronomeModal'
 
@@ -30,11 +30,21 @@ const COMMON_INSTRUMENTS = [
   { id: 'other', name: 'Other Part' },
 ]
 
+// SVG Icons for Password Toggle
+const EyeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+)
+
+const EyeOffIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+)
+
 export default function App() {
   // Auth State
   const [session, setSession] = useState<User | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false) // <-- New State
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [signupInstrument, setSignupInstrument] = useState('other')
@@ -48,13 +58,12 @@ export default function App() {
   const [activeEnsemble, setActiveEnsemble] = useState<Ensemble | null>(null)
   const [isAppLoading, setIsAppLoading] = useState(true)
 
-  // NEW: Navigation State
-  const [activeTab, setActiveTab] = useState<'ensembles' | 'music'>('ensembles')
+  // Navigation State (Now includes 'settings')
+  const [activeTab, setActiveTab] = useState<'ensembles' | 'music' | 'settings'>('ensembles')
 
   // Modal States
   const [isEnsModalOpen, setIsEnsModalOpen] = useState(false)
   const [isRosterOpen, setIsRosterOpen] = useState(false)
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isTunerOpen, setIsTunerOpen] = useState(false)
   const [isMetronomeOpen, setIsMetronomeOpen] = useState(false)
 
@@ -230,49 +239,52 @@ export default function App() {
   if (!session) {
     if (authMode === 'landing') {
       return (
-        <div className="min-h-screen bg-slate-950 font-sans selection:bg-indigo-500/30 flex flex-col">
-          <nav className="border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-            <h1 className="text-2xl font-black text-white tracking-tight">Marked</h1>
-            <div className="flex gap-4">
-              <button onClick={() => setAuthMode('login')} className="text-sm font-semibold text-slate-300 hover:text-white transition cursor-pointer">Log In</button>
-              <button onClick={() => setAuthMode('signup')} className="text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl shadow-lg transition cursor-pointer">Sign Up</button>
+        <div className="min-h-screen bg-slate-950 font-sans flex flex-col">
+          <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-8 py-5 flex items-center justify-between sticky top-0 z-50">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              Marked
+            </h1>
+            <div className="flex items-center gap-6">
+              <button onClick={() => setAuthMode('login')} className="text-sm font-semibold text-slate-300 hover:text-white transition cursor-pointer">Sign In</button>
+              <button onClick={() => setAuthMode('signup')} className="text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-full shadow-lg transition cursor-pointer">Get Started</button>
             </div>
           </nav>
 
-          <main className="flex-1 flex flex-col items-center justify-center px-6 py-20 text-center relative overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+          <main className="flex-1 flex flex-col items-center justify-center px-6 py-24 text-center relative overflow-hidden">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
             
-            <div className="relative z-10 max-w-4xl space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <span className="inline-block py-1 px-3 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold tracking-widest uppercase mb-4">
+            <div className="relative z-10 max-w-5xl space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <span className="inline-block py-1.5 px-4 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold tracking-widest uppercase mb-4">
                 The Digital Music Stand
               </span>
+              
               <h2 className="text-5xl md:text-7xl font-black text-white tracking-tight leading-tight">
                 Play perfectly <br className="hidden md:block"/> in sync.
               </h2>
               <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                A touch-friendly, real-time rehearsal platform for modern ensembles. Manage repertoire, sync director bowings instantly, and practice offline.
+                A touch-friendly, real-time rehearsal platform designed for modern ensembles. Manage repertoire, sync director bowings instantly, and practice offline.
               </p>
               
               <div className="pt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button onClick={() => setAuthMode('signup')} className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-900/20 transition hover:scale-105 active:scale-95 cursor-pointer">
-                  Get Started for Free
+                <button onClick={() => setAuthMode('signup')} className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-bold text-lg shadow-xl shadow-indigo-900/20 transition cursor-pointer">
+                  Start Rehearsing Free
                 </button>
               </div>
             </div>
 
             <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mt-32 text-left">
-              <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
-                <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 flex items-center justify-center rounded-xl text-2xl mb-6">⚡️</div>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
+                <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 flex items-center justify-center rounded-2xl text-2xl mb-6 border border-emerald-500/20">⚡️</div>
                 <h3 className="text-xl font-bold text-white mb-3">Live Sync</h3>
                 <p className="text-slate-400 leading-relaxed text-sm">When the director writes a bowing or caesura, it instantly appears on every musician's iPad in real-time.</p>
               </div>
-              <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
-                <div className="w-12 h-12 bg-indigo-500/10 text-indigo-400 flex items-center justify-center rounded-xl text-2xl mb-6">📚</div>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
+                <div className="w-14 h-14 bg-indigo-500/10 text-indigo-400 flex items-center justify-center rounded-2xl text-2xl mb-6 border border-indigo-500/20">📚</div>
                 <h3 className="text-xl font-bold text-white mb-3">Smart Layers</h3>
                 <p className="text-slate-400 leading-relaxed text-sm">Draw personal notes that only you can see, or promote a section leader to write bowings for all the first violins.</p>
               </div>
-              <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
-                <div className="w-12 h-12 bg-amber-500/10 text-amber-400 flex items-center justify-center rounded-xl text-2xl mb-6">📶</div>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
+                <div className="w-14 h-14 bg-amber-500/10 text-amber-400 flex items-center justify-center rounded-2xl text-2xl mb-6 border border-amber-500/20">📶</div>
                 <h3 className="text-xl font-bold text-white mb-3">Offline Ready</h3>
                 <p className="text-slate-400 leading-relaxed text-sm">School Wi-Fi down? No problem. Scores are cached directly to your device for instant, zero-lag opening.</p>
               </div>
@@ -283,50 +295,82 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
-        <button onClick={() => setAuthMode('landing')} className="absolute top-8 left-8 text-slate-400 hover:text-white transition flex items-center gap-2 font-medium cursor-pointer">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative font-sans">
+        <button onClick={() => setAuthMode('landing')} className="absolute top-8 left-8 text-slate-400 hover:text-white transition flex items-center gap-2 font-medium cursor-pointer px-4 py-2 bg-slate-900 rounded-full border border-slate-800">
           ← Back to Home
         </button>
 
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8 animate-in fade-in zoom-in-95 duration-300">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-white mb-2">{authMode === 'login' ? 'Welcome Back' : 'Join Marked'}</h2>
-            <p className="text-slate-400 text-sm">
-              {authMode === 'login' ? 'Log in to access your repertoire.' : 'Create an account to join an ensemble.'}
+        <div className="w-full max-w-[440px] bg-slate-900 border border-slate-800 rounded-[2rem] shadow-2xl p-10 animate-in fade-in zoom-in-95 duration-300">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-black text-white mb-3 tracking-tight">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
+            <p className="text-slate-400 text-sm font-medium">
+              {authMode === 'login' ? 'Sign in to access your repertoire.' : 'Join Marked to access your ensembles.'}
             </p>
           </div>
           
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-6">
             {authMode === 'signup' && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <input type="text" placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" />
-                  <input type="text" placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" />
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1">First Name</label>
+                    <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1">Last Name</label>
+                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
+                  </div>
                 </div>
-                <select value={signupInstrument} onChange={e => setSignupInstrument(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition cursor-pointer">
-                  <option value="" disabled>Select Instrument...</option>
-                  {COMMON_INSTRUMENTS.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1">Primary Instrument</label>
+                  <select value={signupInstrument} onChange={e => setSignupInstrument(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer">
+                    <option value="" disabled>Select Instrument...</option>
+                    {COMMON_INSTRUMENTS.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </div>
+              </div>
             )}
-            <input type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" />
+            
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1">Email Address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1">Password</label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 pr-12 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition cursor-pointer" title={showPassword ? "Hide Password" : "Show Password"}>
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+            </div>
             
             {authMode === 'signup' && (
-              <input type="text" placeholder="6-Digit Ensemble Join Code (Optional)" value={signupCode} onChange={e => setSignupCode(e.target.value)} maxLength={6} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition font-mono tracking-widest uppercase placeholder:normal-case placeholder:tracking-normal" />
+              <div className="space-y-1.5 pt-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-1 flex items-center justify-between">
+                  <span>Ensemble Invite Code</span>
+                  <span className="text-slate-500 normal-case tracking-normal">Optional</span>
+                </label>
+                <input type="text" placeholder="6-Digit Code" value={signupCode} onChange={e => setSignupCode(e.target.value)} maxLength={6} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono tracking-widest uppercase placeholder:normal-case placeholder:tracking-normal placeholder-slate-600" />
+              </div>
             )}
 
-            <button type="submit" disabled={authLoading} className="w-full py-3 mt-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-bold text-white shadow-lg transition cursor-pointer">
-              {authLoading ? 'Please wait...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+            <button type="submit" disabled={authLoading} className="w-full py-4 mt-8 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-bold text-white shadow-lg transition-all cursor-pointer">
+              {authLoading ? 'Processing...' : authMode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
-          <p className="text-center mt-6 text-sm text-slate-400">
-            {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold hover:text-indigo-300 transition cursor-pointer">
-              {authMode === 'login' ? 'Sign Up' : 'Log In'}
-            </button>
-          </p>
+          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+            <p className="text-sm text-slate-400 font-medium">
+              {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+              <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold hover:text-indigo-300 transition cursor-pointer ml-1">
+                {authMode === 'login' ? 'Create one now' : 'Sign In'}
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -336,75 +380,77 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-indigo-500/30">
       
-      {/* --- UPDATED NAVBAR WITH TABS --- */}
-      <nav className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-6 py-4 flex items-center justify-between shadow-sm">
-        
-        {/* Left Side: Logo and Ensemble Tools */}
+      <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-6 w-1/3">
-          <h1 className="text-xl font-black text-white tracking-tight">Marked</h1>
+          <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+             Marked
+          </h1>
           
           {activeTab === 'ensembles' && (
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-3">
               <select 
                 value={activeEnsemble?.id || ''} 
                 onChange={e => setActiveEnsemble(ensembles.find(x => x.id === e.target.value) || null)} 
-                className="bg-slate-950 border border-slate-700 text-sm rounded-xl px-4 py-2 font-semibold text-slate-200 outline-none focus:border-indigo-500 transition cursor-pointer"
+                className="bg-slate-950 border border-slate-700 text-sm rounded-lg px-4 py-2 font-semibold text-slate-200 outline-none focus:border-indigo-500 transition cursor-pointer"
               >
                 <option value="" disabled>Select Ensemble...</option>
                 {ensembles.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
-              <button onClick={() => setIsEnsModalOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition cursor-pointer" title="Join or Create Group">
+              <button onClick={() => setIsEnsModalOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold transition cursor-pointer" title="Join or Create Group">
                 +
               </button>
             </div>
           )}
         </div>
 
-        {/* Center: New Tab Switcher */}
+        {/* Center: Segmented Control */}
         <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 shadow-inner">
           <button 
             onClick={() => setActiveTab('ensembles')} 
-            className={`px-5 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
-              activeTab === 'ensembles' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'ensembles' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             Ensembles
           </button>
           <button 
             onClick={() => setActiveTab('music')} 
-            className={`px-5 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
-              activeTab === 'music' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'music' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Music & Tools
+            Practice Room
           </button>
         </div>
         
-        {/* Right Side: Profile & Utilities */}
-        <div className="flex items-center justify-end gap-4 w-1/3">
+        {/* Right Side */}
+        <div className="flex items-center justify-end gap-5 w-1/3">
           {activeTab === 'ensembles' && activeEnsemble && (
-            <button onClick={() => setIsRosterOpen(true)} className="hidden md:flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-medium transition cursor-pointer border border-slate-700">
+            <button onClick={() => setIsRosterOpen(true)} className="hidden md:flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-bold transition border border-slate-700 cursor-pointer">
               👥 Roster
             </button>
           )}
           
-          <div className="h-6 w-px bg-slate-800 mx-1 hidden md:block"></div>
+          <div className="h-8 w-px bg-slate-800 mx-2 hidden md:block"></div>
           
-          <span className="text-sm font-medium text-slate-400 hidden sm:block">
-            {profile?.first_name} {profile?.last_name}
-          </span>
-          
-          <button onClick={() => setIsProfileOpen(true)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 transition cursor-pointer" title="Profile Settings">
-            ⚙️
+          {/* Settings Tab Button */}
+          <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-3 hover:opacity-80 transition cursor-pointer text-left group p-1 pr-3 rounded-full ${activeTab === 'settings' ? 'bg-slate-800 border border-slate-700' : 'border border-transparent'}`}>
+             <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-sm font-bold group-hover:bg-slate-700 transition">
+               {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+             </div>
+             <div className="hidden sm:block">
+               <p className="text-sm font-bold text-white leading-tight">{profile?.first_name}</p>
+               <p className="text-xs font-medium text-slate-400">Settings</p>
+             </div>
           </button>
           
-          <button onClick={handleLogout} className="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ml-2">
+          <button onClick={handleLogout} className="text-xs bg-slate-900 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-500/20 px-3 py-2 rounded-lg font-bold transition cursor-pointer ml-2">
             Log Out
           </button>
         </div>
       </nav>
 
-      {/* --- UPDATED MAIN CONTENT SWITCHER --- */}
+      {/* Main Content Area Routing */}
       <div className="flex-1 overflow-auto">
         {activeTab === 'ensembles' ? (
           <EnsemblesView 
@@ -416,100 +462,94 @@ export default function App() {
             onOpenEnsModal={() => setIsEnsModalOpen(true)} 
             onOpenRoster={() => setIsRosterOpen(true)} 
           />
-        ) : (
-          <div className="max-w-6xl mx-auto w-full p-8 animate-in fade-in duration-300">
-            <h2 className="text-3xl font-black text-white mb-2">Practice Room</h2>
-            <p className="text-slate-400 mb-8">Your personal workspace for individual practice.</p>
+        ) : activeTab === 'music' ? (
+          <div className="max-w-6xl mx-auto w-full p-8 lg:p-12 animate-in fade-in duration-300">
+            <h2 className="text-4xl font-black text-white mb-2 tracking-tight">Practice Room</h2>
+            <p className="text-slate-400 mb-10 text-lg">Your personal toolkit for individual practice.</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <button 
                 onClick={() => setIsMetronomeOpen(true)} 
-                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-left hover:border-indigo-500 transition group cursor-pointer shadow-lg hover:shadow-indigo-500/10"
+                className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-left hover:border-indigo-500 transition-all group cursor-pointer shadow-xl relative overflow-hidden"
               >
-                <div className="text-5xl mb-6 group-hover:scale-110 group-hover:-rotate-3 transition-transform origin-bottom-left inline-block">⏱</div>
-                <h3 className="text-2xl font-bold text-white mb-3">Metronome</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
+                <div className="text-6xl mb-6 group-hover:scale-110 group-hover:-rotate-6 transition-transform origin-bottom-left inline-block relative z-10">⏱</div>
+                <h3 className="text-2xl font-bold text-white mb-3 relative z-10">Metronome</h3>
+                <p className="text-slate-400 text-sm leading-relaxed relative z-10">
                   A high-precision visual and audio metronome. Tap to set tempo, customize time signatures, and keep perfect rhythm.
                 </p>
               </button>
 
               <button 
                 onClick={() => setIsTunerOpen(true)} 
-                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-left hover:border-emerald-500 transition group cursor-pointer shadow-lg hover:shadow-emerald-500/10"
+                className="bg-slate-900 border border-slate-800 p-10 rounded-[2rem] text-left hover:border-emerald-500 transition-all group cursor-pointer shadow-xl relative overflow-hidden"
               >
-                <div className="text-5xl mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform origin-bottom-left inline-block">🪕</div>
-                <h3 className="text-2xl font-bold text-white mb-3">Chromatic Tuner</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
+                <div className="text-6xl mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform origin-bottom-left inline-block relative z-10">🪕</div>
+                <h3 className="text-2xl font-bold text-white mb-3 relative z-10">Chromatic Tuner</h3>
+                <p className="text-slate-400 text-sm leading-relaxed relative z-10">
                   Real-time microphone analysis with a digital needle. Ensure your instrument is perfectly in tune before rehearsal.
                 </p>
               </button>
             </div>
           </div>
+        ) : (
+          profile && (
+            <ProfileSettingsView 
+              user={session}
+              profile={profile}
+              onUpdate={(newProfile: Profile) => setProfile(newProfile)}
+            />
+          )
         )}
       </div>
 
-      {/* MODAL: Join or Create Ensemble */}
+      {/* MODALS */}
       {isEnsModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-700 shadow-2xl rounded-3xl p-8 w-full max-w-md relative">
-            <button onClick={() => setIsEnsModalOpen(false)} className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer">✕</button>
-            <h3 className="font-bold text-2xl text-white mb-6">Groups</h3>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-700 shadow-2xl rounded-[2rem] p-8 w-full max-w-md relative animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={() => setIsEnsModalOpen(false)} className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 transition cursor-pointer">✕</button>
+            <h3 className="font-black text-2xl text-white mb-8">Manage Ensembles</h3>
             
             <div className="space-y-8">
-              <form onSubmit={handleJoinEnsemble} className="space-y-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Join Existing Ensemble</p>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="6-Digit Join Code" value={joinCode} onChange={e => setJoinCode(e.target.value)} maxLength={6} required className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white uppercase outline-none focus:border-indigo-500 transition font-mono tracking-widest" />
-                  <button type="submit" disabled={actionLoading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-bold text-white shadow-lg transition cursor-pointer">Join</button>
-                </div>
-              </form>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+                <form onSubmit={handleJoinEnsemble} className="space-y-4">
+                  <div>
+                    <h4 className="font-bold text-white">Join Existing Ensemble</h4>
+                    <p className="text-xs text-slate-400 mt-1">Enter the 6-digit code provided by your director.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <input type="text" placeholder="e.g. A1B2C3" value={joinCode} onChange={e => setJoinCode(e.target.value)} maxLength={6} required className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white uppercase outline-none focus:border-indigo-500 transition font-mono tracking-widest placeholder-slate-600" />
+                    <button type="submit" disabled={actionLoading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-bold text-white transition cursor-pointer">Join</button>
+                  </div>
+                </form>
+              </div>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
-                <div className="relative flex justify-center"><span className="bg-slate-900 px-3 text-xs font-medium text-slate-500">OR</span></div>
+                <div className="relative flex justify-center"><span className="bg-slate-900 px-4 text-xs font-bold text-slate-500 uppercase tracking-widest">OR</span></div>
               </div>
 
-              <form onSubmit={handleCreateEnsemble} className="space-y-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Create New Ensemble</p>
-                <input type="text" placeholder="Ensemble Name (e.g. Symphony Orchestra)" value={newEnsName} onChange={e => setNewEnsName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" />
-                <button type="submit" disabled={actionLoading} className="w-full py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-bold transition cursor-pointer">Create as Director</button>
-              </form>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+                <form onSubmit={handleCreateEnsemble} className="space-y-4">
+                  <div>
+                    <h4 className="font-bold text-white">Create New Ensemble</h4>
+                    <p className="text-xs text-slate-400 mt-1">Start a new group as the director.</p>
+                  </div>
+                  <input type="text" placeholder="Ensemble Name (e.g. Jazz Band)" value={newEnsName} onChange={e => setNewEnsName(e.target.value)} required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition placeholder-slate-600" />
+                  <button type="submit" disabled={actionLoading} className="w-full py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-bold transition cursor-pointer">
+                    Create as Director
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: Roster */}
       {isRosterOpen && activeEnsemble && (
-        <RosterModal 
-          ensembleId={activeEnsemble.id} 
-          currentUserRole={activeEnsemble.role || 'member'} 
-          onClose={() => setIsRosterOpen(false)} 
-        />
+        <RosterModal ensembleId={activeEnsemble.id} currentUserRole={activeEnsemble.role || 'member'} onClose={() => setIsRosterOpen(false)} />
       )}
-
-      {/* MODAL: Tuner */}
-      {isTunerOpen && (
-        <TunerModal onClose={() => setIsTunerOpen(false)} />
-      )}
-
-      {/* MODAL: Metronome */}
-      {isMetronomeOpen && (
-        <MetronomeModal onClose={() => setIsMetronomeOpen(false)} />
-      )}
-
-      {/* MODAL: Profile Settings */}
-      {isProfileOpen && profile && (
-        <ProfileSettingsModal 
-          user={session}
-          profile={profile}
-          onClose={() => setIsProfileOpen(false)}
-          onUpdate={(newProfile: Profile) => {
-            setProfile(newProfile)
-            setIsProfileOpen(false)
-          }}
-        />
-      )}
+      {isTunerOpen && <TunerModal onClose={() => setIsTunerOpen(false)} />}
+      {isMetronomeOpen && <MetronomeModal onClose={() => setIsMetronomeOpen(false)} />}
     </div>
   )
 }
