@@ -5,6 +5,8 @@ import type { Ensemble, Piece, PiecePart, Announcement, AnnouncementReply, Profi
 import { formatDateTime } from '../utils'
 import ScoreViewer from './ScoreViewer'
 import InventoryView from './InventoryView'
+import SectionalReportsView from './SectionalReportsView'
+import AssignmentsView from './AssignmentsView'
 
 interface EnsemblesViewProps {
   user: User
@@ -39,7 +41,7 @@ const COMMON_INSTRUMENTS = [
 export default function EnsemblesView({ 
   user, profile, ensembles, activeEnsemble, setActiveEnsemble, onOpenEnsModal, onOpenRoster 
 }: EnsemblesViewProps) {
-  const [ensembleTab, setEnsembleTab] = useState<'repertoire' | 'announcements' | 'ensemble_settings' | 'inventory'>('repertoire')
+  const [ensembleTab, setEnsembleTab] = useState<'repertoire' | 'announcements' | 'ensemble_settings' | 'inventory' | 'reports' | 'assignments'>('repertoire')
   
   const [pieces, setPieces] = useState<Piece[]>([])
   const [parts, setParts] = useState<PiecePart[]>([])
@@ -256,6 +258,7 @@ export default function EnsemblesView({
   )
 
   const isDirector = activeEnsemble.role === 'director'
+  const isSectionLeaderForEnsemble = sectionLeaders.some(l => l.user_id === user.id)
   
   const isLeaderForViewingPart = viewingScore ? sectionLeaders.some(l => 
     l.user_id === user.id && 
@@ -281,11 +284,18 @@ export default function EnsemblesView({
             <button onClick={onOpenEnsModal} className="md:hidden text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-4 py-2 rounded-xl font-medium transition hover:bg-indigo-500/20">+ Join Group</button>
             <button onClick={onOpenRoster} className="md:hidden text-xs bg-slate-800 text-slate-300 border border-slate-700 px-4 py-2 rounded-xl font-medium transition hover:bg-slate-700">Roster</button>
           </div>
-          <div className="flex items-center gap-8 px-2">
+          
+          <div className="flex flex-wrap items-center gap-6 px-2">
             <button onClick={() => setEnsembleTab('repertoire')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'repertoire' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Repertoire</button>
             <button onClick={() => setEnsembleTab('announcements')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'announcements' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Announcements</button>
+            <button onClick={() => setEnsembleTab('assignments')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'assignments' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Playing Tests</button>
             <button onClick={() => setEnsembleTab('inventory')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'inventory' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Inventory</button>
-            {activeEnsemble.role === 'director' && (
+            
+            {(isDirector || isSectionLeaderForEnsemble) && (
+              <button onClick={() => setEnsembleTab('reports')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'reports' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Sectional Reports</button>
+            )}
+
+            {isDirector && (
               <button onClick={() => setEnsembleTab('ensemble_settings')} className={`text-sm font-semibold tracking-wide transition-all ${ensembleTab === 'ensemble_settings' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1.5' : 'text-slate-400 hover:text-slate-200'}`}>Director Controls</button>
             )}
           </div>
@@ -404,11 +414,30 @@ export default function EnsemblesView({
           </div>
         )}
 
+        {ensembleTab === 'assignments' && (
+          <AssignmentsView 
+            ensembleId={activeEnsemble.id}
+            isDirector={isDirector}
+            currentUserId={user.id}
+            roster={roster}
+          />
+        )}
+
         {ensembleTab === 'inventory' && (
           <InventoryView 
             ensembleId={activeEnsemble.id}
-            isDirector={activeEnsemble.role === 'director'}
+            isDirector={isDirector}
             currentUserId={user.id}
+            roster={roster}
+          />
+        )}
+
+        {ensembleTab === 'reports' && (
+          <SectionalReportsView 
+            ensembleId={activeEnsemble.id}
+            isDirector={isDirector}
+            currentUserId={user.id}
+            isSectionLeader={isSectionLeaderForEnsemble}
             roster={roster}
           />
         )}
