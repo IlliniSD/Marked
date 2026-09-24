@@ -165,54 +165,50 @@ export default function InventoryView({ ensembleId, isDirector, currentUserId, r
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayedItems.map(item => {
-            const assignedStudent = roster.find(r => r.user_id === item.assigned_to)
-
-            return (
-              <div key={item.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                      {item.item_type}
-                    </span>
-                    {isDirector && (
-                      <button onClick={() => handleDeleteItem(item.id)} className="text-xs text-rose-400 hover:text-rose-300 cursor-pointer">
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-bold text-white">{item.name}</h3>
-                  {item.condition_notes && (
-                    <p className="text-xs text-slate-400 mt-1 italic">Notes: {item.condition_notes}</p>
+          {displayedItems.map(item => (
+            <div key={item.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    {item.item_type}
+                  </span>
+                  {isDirector && (
+                    <button onClick={() => handleDeleteItem(item.id)} className="text-xs text-rose-400 hover:text-rose-300 cursor-pointer">
+                      Delete
+                    </button>
                   )}
                 </div>
-
-                {/* Assignment Controls */}
-                <div className="pt-3 border-t border-slate-800">
-                  {isDirector ? (
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Assigned Student</label>
-                      <select 
-                        value={item.assigned_to || ''} 
-                        onChange={e => handleAssignItem(item.id, e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 cursor-pointer"
-                      >
-                        <option value="">Unassigned</option>
-                        {roster.map(r => (
-                          <option key={r.user_id} value={r.user_id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-medium">Status:</span>
-                      <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">Checked out to you</span>
-                    </div>
-                  )}
-                </div>
+                <h3 className="text-lg font-bold text-white">{item.name}</h3>
+                {item.condition_notes && (
+                  <p className="text-xs text-slate-400 mt-1 italic">Notes: {item.condition_notes}</p>
+                )}
               </div>
-            )
-          })}
+
+              {/* Assignment Controls */}
+              <div className="pt-3 border-t border-slate-800">
+                {isDirector ? (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Assigned Student</label>
+                    <select 
+                      value={item.assigned_to || ''} 
+                      onChange={e => handleAssignItem(item.id, e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 cursor-pointer"
+                    >
+                      <option value="">Unassigned</option>
+                      {roster.map(r => (
+                        <option key={r.user_id} value={r.user_id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Status:</span>
+                    <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">Checked out to you</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
