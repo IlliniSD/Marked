@@ -119,6 +119,8 @@ export interface Assignment {
   instructions?: string;
   due_date?: string;
   created_at: string;
+  assigned_students?: string[];
+  score_id?: string | null;
 }
 
 export interface AssignmentSubmission {
@@ -127,6 +129,7 @@ export interface AssignmentSubmission {
   user_id: string;
   audio_url: string;
   teacher_notes?: string;
+  feedback_published?: boolean; // <-- Add this line
   submitted_at: string;
 }
 
@@ -138,4 +141,12 @@ export interface SectionalReport {
   attendance_notes?: string;
   rehearsal_notes?: string;
   created_at: string;
+}
+
+export interface PieceAssignment {
+  id: string;
+  ensemble_id: string;
+  piece_id: string;
+  user_id: string;
+  instrument: string;
 }

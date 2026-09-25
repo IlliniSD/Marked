@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import type { User } from '@supabase/supabase-js'
-import type { Ensemble, Piece, PiecePart, Announcement, AnnouncementReply, Profile } from '../types'
+import type { Ensemble, Piece, PiecePart, Announcement, AnnouncementReply, Profile, PieceAssignment } from '../types'
 import { formatDateTime } from '../utils'
 import ScoreViewer from './ScoreViewer'
 import InventoryView from './InventoryView'
@@ -38,6 +38,15 @@ const COMMON_INSTRUMENTS = [
   { id: 'other', name: 'Other Part' },
 ]
 
+const isTrueOverride = (baseInst?: string, assignedInst?: string) => {
+  if (!baseInst || !assignedInst) return false;
+  if (baseInst === assignedInst) return false;
+  if (baseInst.toLowerCase().includes('violin') && assignedInst.toLowerCase().includes('violin')) return false;
+  const baseName = baseInst.split('_')[0];
+  if (baseName && assignedInst.startsWith(baseName)) return false;
+  return true;
+}
+
 export default function EnsemblesView({ 
   user, profile, ensembles, activeEnsemble, setActiveEnsemble, onOpenEnsModal, onOpenRoster 
 }: EnsemblesViewProps) {
@@ -45,6 +54,7 @@ export default function EnsemblesView({
   
   const [pieces, setPieces] = useState<Piece[]>([])
   const [parts, setParts] = useState<PiecePart[]>([])
+  const [pieceAssignments, setPieceAssignments] = useState<PieceAssignment[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [replies, setReplies] = useState<AnnouncementReply[]>([])
   
@@ -66,15 +76,19 @@ export default function EnsemblesView({
   const [partPdfFile, setPartPdfFile] = useState<File | null>(null)
   const [isUploadingPart, setIsUploadingPart] = useState(false)
 
+  // Explicit Save Feedback & Draft State for Overrides
+  const [draftOverrides, setDraftOverrides] = useState<Record<string, string>>({})
+  const [overrideStatus, setOverrideStatus] = useState<Record<string, string>>({})
+
   const [isAnnounceModal, setIsAnnounceModal] = useState(false)
   const [newAnnounce, setNewAnnounce] = useState({ title: '', content: '' })
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [editPerm, setEditPerm] = useState('directors_only')
   const [editReplyPerm, setEditReplyPerm] = useState('off')
   const [settingsFeedback, setSettingsFeedback] = useState('')
-
+  
   // Global Roster & Section Leaders
-  const [roster, setRoster] = useState<{user_id: string, name: string, role: string}[]>([])
+  const [roster, setRoster] = useState<{user_id: string, name: string, role: string, section: string}[]>([])
   const [sectionLeaders, setSectionLeaders] = useState<{id: string, piece_id: string, user_id: string, instrument: string}[]>([])
   
   // Section Leader Modal State
@@ -87,15 +101,21 @@ export default function EnsemblesView({
 
     supabase.from('pieces').select('*').eq('ensemble_id', activeEnsemble.id).order('created_at', { ascending: false }).then(({ data }) => setPieces(data || []))
     supabase.from('piece_parts').select('*').eq('ensemble_id', activeEnsemble.id).then(({ data }) => setParts(data || []))
+    supabase.from('piece_assignments').select('*').eq('ensemble_id', activeEnsemble.id).then(({ data }) => setPieceAssignments(data || []))
     supabase.from('section_leaders').select('*').eq('ensemble_id', activeEnsemble.id).then(({ data }) => setSectionLeaders(data || []))
 
     const fetchRoster = async () => {
       const { data: mems } = await supabase.from('ensemble_members').select('user_id, role').eq('ensemble_id', activeEnsemble.id)
-      const { data: profs } = await supabase.from('profiles').select('id, first_name, last_name')
+      const { data: profs } = await supabase.from('profiles').select('id, first_name, last_name, instrument')
       if (mems && profs) {
         const merged = mems.map(m => {
           const p = profs.find(pr => pr.id === m.user_id)
-          return { user_id: m.user_id, role: m.role, name: p ? `${p.first_name} ${p.last_name}` : 'Unknown' }
+          return { 
+            user_id: m.user_id, 
+            role: m.role, 
+            name: p ? `${p.first_name} ${p.last_name}` : 'Unknown',
+            section: p?.instrument || 'other'
+          }
         })
         setRoster(merged)
       }
@@ -205,7 +225,7 @@ export default function EnsemblesView({
     else setParts(p => p.filter(x => x.id !== id))
   }
 
-  // --- PER-PIECE SECTION LEADERS --- //
+  // --- PER-PIECE SECTION LEADERS & ASSIGNMENTS --- //
   const handleAssignSectionLeader = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!activeEnsemble || !selectedPieceForParts || !newLeaderUser || !newLeaderInst) return
@@ -228,6 +248,73 @@ export default function EnsemblesView({
     if (!error) setSectionLeaders(sectionLeaders.filter(l => l.id !== id))
   }
 
+  const handleSetPartOverride = async (studentId: string, instrument: string) => {
+    if (!selectedPieceForParts || !activeEnsemble) return
+
+    setOverrideStatus(prev => ({ ...prev, [studentId]: 'Saving...' }))
+
+    if (instrument === '') {
+      // 1. Clear locally first
+      setPieceAssignments(prev => prev.filter(pa => !(pa.piece_id === selectedPieceForParts.id && pa.user_id === studentId)))
+      
+      // 2. Delete from database
+      const { error } = await supabase.from('piece_assignments')
+        .delete()
+        .match({ piece_id: selectedPieceForParts.id, user_id: studentId })
+        
+      if (error) {
+        alert("Error removing override: " + error.message)
+        setOverrideStatus(prev => ({ ...prev, [studentId]: '' }))
+      } else {
+        setOverrideStatus(prev => ({ ...prev, [studentId]: '✅ Saved' }))
+        setDraftOverrides(prev => { const next = {...prev}; delete next[studentId]; return next; })
+        setTimeout(() => setOverrideStatus(prev => ({ ...prev, [studentId]: '' })), 2000)
+      }
+    } else {
+      // 1. Optimistic Update
+      const tempOverride = {
+        id: 'temp-' + Date.now(),
+        ensemble_id: activeEnsemble.id,
+        piece_id: selectedPieceForParts.id,
+        user_id: studentId,
+        instrument: instrument
+      }
+      setPieceAssignments(prev => [...prev.filter(pa => !(pa.piece_id === selectedPieceForParts.id && pa.user_id === studentId)), tempOverride])
+      
+      // 2. Database Upsert
+      const { data: existing } = await supabase.from('piece_assignments')
+        .select('id')
+        .match({ piece_id: selectedPieceForParts.id, user_id: studentId })
+        .maybeSingle()
+
+      let finalError = null;
+      if (existing) {
+        const { error } = await supabase.from('piece_assignments')
+          .update({ instrument })
+          .eq('id', existing.id)
+        finalError = error;
+      } else {
+        const { error } = await supabase.from('piece_assignments')
+          .insert({
+            ensemble_id: activeEnsemble.id,
+            piece_id: selectedPieceForParts.id,
+            user_id: studentId,
+            instrument: instrument
+          })
+        finalError = error;
+      }
+
+      if (finalError) {
+        alert("Error saving override: " + finalError.message)
+        setOverrideStatus(prev => ({ ...prev, [studentId]: '' }))
+      } else {
+        setOverrideStatus(prev => ({ ...prev, [studentId]: '✅ Saved' }))
+        setDraftOverrides(prev => { const next = {...prev}; delete next[studentId]; return next; })
+        setTimeout(() => setOverrideStatus(prev => ({ ...prev, [studentId]: '' })), 2000)
+      }
+    }
+  }
+
   // --- ANNOUNCEMENTS & SETTINGS --- //
   const handleAddAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -247,8 +334,8 @@ export default function EnsemblesView({
     if (!activeEnsemble) return
     await supabase.from('ensembles').update({ announcement_permission: editPerm, announcement_reply_permission: editReplyPerm }).eq('id', activeEnsemble.id)
     setActiveEnsemble({ ...activeEnsemble, announcement_permission: editPerm, announcement_reply_permission: editReplyPerm })
-    setSettingsFeedback('Ensemble settings updated!')
-    setTimeout(() => setSettingsFeedback(''), 2000)
+    setSettingsFeedback('✅ Ensemble settings saved!')
+    setTimeout(() => setSettingsFeedback(''), 3000)
   }
 
   if (!activeEnsemble) return (
@@ -335,7 +422,13 @@ export default function EnsemblesView({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {visiblePieces.map(p => {
                   const pieceParts = parts.filter(pt => pt.piece_id === p.id)
-                  const myPart = pieceParts.find(pt => pt.instrument === profile?.instrument)
+                  
+                  const override = pieceAssignments.find(pa => pa.piece_id === p.id && pa.user_id === user.id)
+                  const targetInstrument = override ? override.instrument : profile?.instrument
+                  const myPart = targetInstrument ? pieceParts.find(pt => pt.instrument === targetInstrument) : null
+                  const targetInstrumentName = COMMON_INSTRUMENTS.find(i => i.id === targetInstrument)?.name || targetInstrument
+                  
+                  const showOverrideBadge = override && isTrueOverride(profile?.instrument, override.instrument)
 
                   return (
                     <div key={p.id} className={`group relative flex flex-col justify-between p-6 rounded-2xl border transition-all duration-300 ${showArchived ? 'bg-slate-950/50 border-slate-800 opacity-80' : 'bg-gradient-to-b from-slate-900/60 to-slate-900/30 border-slate-800 hover:border-slate-700 hover:shadow-xl'}`}>
@@ -360,21 +453,29 @@ export default function EnsemblesView({
                         <h3 className={`text-xl font-bold mb-1 transition-colors ${showArchived ? 'text-slate-400' : 'text-white group-hover:text-indigo-100'}`}>{p.title}</h3>
                         <p className="text-sm text-slate-400 font-medium">{p.composer}</p>
 
-                        {myPart && !showArchived && (
+                        {!showArchived && targetInstrument && (
                           <div className="mt-5 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex items-center justify-between">
                             <div>
-                              <p className="text-[10px] text-indigo-400 uppercase font-bold tracking-wider mb-0.5">Your Part</p>
-                              <p className="text-sm font-semibold text-white">{myPart.name}</p>
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="text-[10px] text-indigo-400 uppercase font-bold tracking-wider">Assigned Part</p>
+                                {showOverrideBadge && <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-sm">Override</span>}
+                              </div>
+                              <p className="text-sm font-semibold text-white">{targetInstrumentName}</p>
                             </div>
-                            <button onClick={() => setViewingScore({ id: myPart.id, url: myPart.file_url, title: myPart.name, instrument: myPart.instrument, piece_id: p.id })} className="text-xs bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-900/50 px-4 py-2 rounded-lg text-white font-bold transition hover:scale-105 active:scale-95 cursor-pointer">
-                              Open
-                            </button>
+                            
+                            {myPart ? (
+                              <button onClick={() => setViewingScore({ id: myPart.id, url: myPart.file_url, title: myPart.name, instrument: myPart.instrument, piece_id: p.id })} className="text-xs bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-900/50 px-4 py-2 rounded-lg text-white font-bold transition hover:scale-105 active:scale-95 cursor-pointer">
+                                Open
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic px-2">Awaiting PDF</span>
+                            )}
                           </div>
                         )}
                       </div>
                       
                       <button onClick={() => setSelectedPieceForParts(p)} className="mt-6 w-full py-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-sm font-semibold text-slate-300 hover:text-white transition border border-slate-800 cursor-pointer">
-                        View Repertoire Parts
+                        View All Parts & Overrides
                       </button>
                     </div>
                   )
@@ -466,7 +567,7 @@ export default function EnsemblesView({
                 </div>
               </div>
               <button onClick={handleSaveSettings} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition cursor-pointer">Save Settings</button>
-              {settingsFeedback && <p className="text-sm font-medium text-emerald-400 text-center">{settingsFeedback}</p>}
+              {settingsFeedback && <p className="text-sm font-medium text-emerald-400 text-center animate-in fade-in duration-300">{settingsFeedback}</p>}
             </div>
           </div>
         )}
@@ -537,6 +638,7 @@ export default function EnsemblesView({
 
             {activeEnsemble.role === 'director' && (
               <div className="space-y-6">
+                
                 {/* 1. Upload Form */}
                 <form onSubmit={handleUploadPart} className="mt-2 pt-6 border-t border-slate-800 space-y-4">
                   <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2">Upload New Part</p>
@@ -552,51 +654,100 @@ export default function EnsemblesView({
                   </div>
                 </form>
 
-                {/* 2. Section Leader Assignment */}
-                <div className="pt-6 border-t border-slate-800">
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Assign Section Leaders</p>
-                  {availableInstrumentsForSelectedPiece.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">Upload parts first to assign section leaders.</p>
-                  ) : (
-                    <form onSubmit={handleAssignSectionLeader} className="flex gap-3">
-                      <select value={newLeaderUser} onChange={e => setNewLeaderUser(e.target.value)} required className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
-                        <option value="" disabled>Select Musician...</option>
-                        {roster.filter(r => r.role === 'member').map(r => <option key={r.user_id} value={r.user_id}>{r.name}</option>)}
-                      </select>
-                      
-                      <select value={newLeaderInst} onChange={e => setNewLeaderInst(e.target.value)} required className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
-                        {availableInstrumentsForSelectedPiece.map(inst => {
-                          const matchingPart = currentPieceParts.find(p => p.instrument === inst);
-                          const displayLabel = matchingPart?.name || COMMON_INSTRUMENTS.find(i=>i.id===inst)?.name || inst;
-                          return (
-                            <option key={inst} value={inst}>{displayLabel}</option>
-                          )
-                        })}
-                      </select>
-                      <button type="submit" className="px-6 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-bold transition cursor-pointer">Assign</button>
-                    </form>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-800">
+                  
+                  {/* 2. Section Leader Assignment */}
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Assign Leaders</p>
+                    {availableInstrumentsForSelectedPiece.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic">Upload parts first.</p>
+                    ) : (
+                      <form onSubmit={handleAssignSectionLeader} className="flex flex-col gap-2">
+                        <select value={newLeaderUser} onChange={e => setNewLeaderUser(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 transition">
+                          <option value="" disabled>Select Musician...</option>
+                          {roster.filter(r => r.role === 'member').map(r => <option key={r.user_id} value={r.user_id}>{r.name}</option>)}
+                        </select>
+                        <select value={newLeaderInst} onChange={e => setNewLeaderInst(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 transition">
+                          {availableInstrumentsForSelectedPiece.map(inst => {
+                            const matchingPart = currentPieceParts.find(p => p.instrument === inst);
+                            const displayLabel = matchingPart?.name || COMMON_INSTRUMENTS.find(i=>i.id===inst)?.name || inst;
+                            return (
+                              <option key={inst} value={inst}>{displayLabel}</option>
+                            )
+                          })}
+                        </select>
+                        <button type="submit" className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold transition cursor-pointer">Add Leader</button>
+                      </form>
+                    )}
 
-                  {/* Active Leaders for this piece */}
-                  <div className="mt-4 space-y-2">
-                    {sectionLeaders.filter(l => l.piece_id === selectedPieceForParts.id).map(leader => {
-                      const r = roster.find(x => x.user_id === leader.user_id)
-                      const assignedPart = currentPieceParts.find(pt => pt.instrument === leader.instrument);
-                      const displayLabel = assignedPart?.name || COMMON_INSTRUMENTS.find(x => x.id === leader.instrument)?.name || leader.instrument;
-                      
-                      return (
-                        <div key={leader.id} className="flex justify-between items-center px-4 py-2 bg-slate-950/50 rounded-lg border border-slate-800/80">
-                          <div className="flex gap-3 items-center">
-                            <span className="text-sm font-bold text-white">{r?.name || 'Loading...'}</span>
-                            <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">
-                              {displayLabel}
-                            </span>
+                    <div className="mt-3 space-y-1.5 max-h-32 overflow-y-auto">
+                      {sectionLeaders.filter(l => l.piece_id === selectedPieceForParts.id).map(leader => {
+                        const r = roster.find(x => x.user_id === leader.user_id)
+                        const assignedPart = currentPieceParts.find(pt => pt.instrument === leader.instrument);
+                        const displayLabel = assignedPart?.name || COMMON_INSTRUMENTS.find(x => x.id === leader.instrument)?.name || leader.instrument;
+                        
+                        return (
+                          <div key={leader.id} className="flex justify-between items-center px-3 py-1.5 bg-slate-950/50 rounded-md border border-slate-800/80">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white">{r?.name || 'Unknown'}</span>
+                              <span className="text-[9px] uppercase font-bold text-slate-500">{displayLabel}</span>
+                            </div>
+                            <button onClick={() => handleRemoveSectionLeader(leader.id)} className="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 transition cursor-pointer">✕</button>
                           </div>
-                          <button onClick={() => handleRemoveSectionLeader(leader.id)} className="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 transition cursor-pointer">Remove</button>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
+
+                  {/* 3. Student Part Overrides */}
+                  <div className="border-l border-slate-800 pl-6">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Student Part Overrides</p>
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                      {roster.filter(r => r.role === 'member').map(student => {
+                        const override = pieceAssignments.find(pa => pa.piece_id === selectedPieceForParts.id && pa.user_id === student.user_id)
+                        const defaultInstLabel = COMMON_INSTRUMENTS.find(i => i.id === student.section)?.name || student.section
+
+                        // Read from draft state if exists, otherwise fallback to database state
+                        const currentVal = draftOverrides[student.user_id] !== undefined ? draftOverrides[student.user_id] : (override ? override.instrument : '')
+                        
+                        const showOverrideStyle = override && isTrueOverride(student.section, override.instrument);
+
+                        return (
+                          <div key={student.user_id} className="flex flex-col gap-1 bg-slate-950/50 p-2 rounded-lg border border-slate-800/50">
+                            
+                            <div className="flex justify-between items-end mb-1">
+                              <span className="text-xs font-bold text-slate-300">{student.name}</span>
+                              {overrideStatus[student.user_id] && (
+                                <span className="text-[10px] font-bold text-emerald-400 animate-in fade-in">{overrideStatus[student.user_id]}</span>
+                              )}
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              <select 
+                                value={currentVal}
+                                onChange={(e) => setDraftOverrides(prev => ({ ...prev, [student.user_id]: e.target.value }))}
+                                className={`flex-1 bg-slate-900 border ${showOverrideStyle ? 'border-amber-500/50 text-amber-200' : 'border-slate-700 text-slate-400'} rounded-md text-[10px] p-1.5 outline-none focus:border-indigo-500 cursor-pointer transition`}
+                              >
+                                <option value="">Default ({defaultInstLabel})</option>
+                                {availableInstrumentsForSelectedPiece.map(inst => (
+                                  <option key={inst} value={inst}>{COMMON_INSTRUMENTS.find(i=>i.id===inst)?.name || inst}</option>
+                                ))}
+                              </select>
+                              
+                              <button 
+                                onClick={() => handleSetPartOverride(student.user_id, currentVal)}
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-[10px] font-bold shadow-md transition cursor-pointer"
+                              >
+                                Save
+                              </button>
+                            </div>
+
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}

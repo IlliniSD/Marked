@@ -15,6 +15,26 @@ interface Member {
   instrument: string
 }
 
+const COMMON_INSTRUMENTS = [
+  { id: 'conductor', name: 'Full Conductor Score' },
+  { id: 'violin_1', name: 'Violin 1' },
+  { id: 'violin_2', name: 'Violin 2' },
+  { id: 'viola', name: 'Viola' },
+  { id: 'cello', name: 'Cello' },
+  { id: 'double_bass', name: 'Double Bass' },
+  { id: 'flute', name: 'Flute' },
+  { id: 'oboe', name: 'Oboe' },
+  { id: 'clarinet', name: 'Clarinet' },
+  { id: 'bassoon', name: 'Bassoon' },
+  { id: 'horn', name: 'French Horn' },
+  { id: 'trumpet', name: 'Trumpet' },
+  { id: 'trombone', name: 'Trombone' },
+  { id: 'tuba', name: 'Tuba' },
+  { id: 'timpani', name: 'Timpani / Percussion' },
+  { id: 'piano', name: 'Piano' },
+  { id: 'other', name: 'Other Part' },
+]
+
 export default function RosterModal({ ensembleId, currentUserRole, onClose }: RosterModalProps) {
   const [members, setMembers] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -44,7 +64,7 @@ export default function RosterModal({ ensembleId, currentUserRole, onClose }: Ro
             role: m.role,
             first_name: p?.first_name || 'Unknown',
             last_name: p?.last_name || 'Musician',
-            instrument: p?.instrument || 'Unknown'
+            instrument: p?.instrument || 'other'
           }
         })
 
@@ -78,10 +98,6 @@ export default function RosterModal({ ensembleId, currentUserRole, onClose }: Ro
     }
   }
 
-  const formatInstrument = (inst: string) => {
-    return inst.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  }
-
   return (
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
       <div className="bg-slate-900 border border-slate-700 shadow-2xl shadow-black rounded-3xl p-8 w-full max-w-md relative flex flex-col max-h-[85vh]">
@@ -113,8 +129,10 @@ export default function RosterModal({ ensembleId, currentUserRole, onClose }: Ro
                       </span>
                     )}
                   </div>
+                  
+                  {/* Reverted to static text - Director can no longer change default profile instrument */}
                   <p className="text-xs font-medium text-slate-400 mt-1">
-                    {formatInstrument(member.instrument)}
+                    {COMMON_INSTRUMENTS.find(i => i.id === member.instrument)?.name || member.instrument}
                   </p>
                 </div>
 
