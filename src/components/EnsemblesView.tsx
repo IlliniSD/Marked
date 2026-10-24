@@ -80,11 +80,14 @@ export default function EnsemblesView({
   const [draftOverrides, setDraftOverrides] = useState<Record<string, string>>({})
   const [overrideStatus, setOverrideStatus] = useState<Record<string, string>>({})
 
+  // Announcements & Director Settings State
   const [isAnnounceModal, setIsAnnounceModal] = useState(false)
   const [newAnnounce, setNewAnnounce] = useState({ title: '', content: '' })
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
+  const [editEnsName, setEditEnsName] = useState('')
   const [editPerm, setEditPerm] = useState('directors_only')
   const [editReplyPerm, setEditReplyPerm] = useState('off')
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
   const [settingsFeedback, setSettingsFeedback] = useState('')
   
   // Global Roster & Section Leaders
@@ -127,6 +130,7 @@ export default function EnsemblesView({
       supabase.from('announcement_replies').select('*').eq('ensemble_id', activeEnsemble.id).order('created_at', { ascending: true }).then(({ data }) => setReplies(data || []))
     } 
     else if (ensembleTab === 'ensemble_settings' && activeEnsemble.role === 'director') {
+      setEditEnsName(activeEnsemble.name)
       setEditPerm(activeEnsemble.announcement_permission)
       setEditReplyPerm(activeEnsemble.announcement_reply_permission)
     }
@@ -319,21 +323,126 @@ export default function EnsemblesView({
   const handleAddAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile || !activeEnsemble) return
-    const { data } = await supabase.from('announcements').insert({ ensemble_id: activeEnsemble.id, author_id: user.id, author_name: `${profile.first_name} ${profile.last_name}`, title: newAnnounce.title.trim(), content: newAnnounce.content.trim() }).select().single()
-    if (data) { setAnnouncements([data, ...announcements]); setIsAnnounceModal(false); setNewAnnounce({ title: '', content: '' }) }
+    
+    // 1. Post the announcement
+    const { data: newAnnouncement, error: announceError } = await supabase
+      .from('announcements')
+      .insert({ 
+        ensemble_id: activeEnsemble.id, 
+        author_id: user.id, 
+        author_name: `${profile.first_name} ${profile.last_name}`, 
+        title: newAnnounce.title.trim(), 
+        content: newAnnounce.content.trim() 
+      })
+      .select()
+      .single()
+      
+    if (announceError) {
+      alert("Error posting announcement: " + announceError.message)
+      return
+    }
+
+    if (newAnnouncement) {
+      // 2. Add it to the screen instantly
+      setAnnouncements([newAnnouncement, ...announcements])
+      setIsAnnounceModal(false)
+      setNewAnnounce({ title: '', content: '' })
+
+      // 3. Real-time notifications push to ensemble members
+      const targetUsers = roster.filter(r => r.user_id !== user.id)
+      
+      if (targetUsers.length > 0) {
+        const notificationPayloads = targetUsers.map(target => ({
+          user_id: target.user_id,
+          actor_id: user.id,
+          actor_name: `${profile.first_name} ${profile.last_name}`,
+          type: 'announcement',
+          title: `New Announcement: ${newAnnouncement.title}`,
+          message: `${profile.first_name} ${profile.last_name} posted a new announcement.`
+        }))
+
+        await supabase.from('notifications').insert(notificationPayloads)
+      }
+    }
   }
 
   const handlePostReply = async (announcementId: string) => {
     const c = replyInputs[announcementId]?.trim()
     if (!c || !profile || !activeEnsemble) return
-    const { data } = await supabase.from('announcement_replies').insert({ announcement_id: announcementId, ensemble_id: activeEnsemble.id, author_id: user.id, author_name: `${profile.first_name} ${profile.last_name}`, content: c }).select().single()
-    if (data) { setReplies(p => [...p, data]); setReplyInputs(p => ({ ...p, [announcementId]: '' })) }
+    
+    // 1. Post the reply
+    const { data: newReply, error: replyError } = await supabase
+      .from('announcement_replies')
+      .insert({ 
+        announcement_id: announcementId, 
+        ensemble_id: activeEnsemble.id, 
+        author_id: user.id, 
+        author_name: `${profile.first_name} ${profile.last_name}`, 
+        content: c 
+      })
+      .select()
+      .single()
+      
+    if (replyError) {
+      alert("Error posting reply: " + replyError.message)
+      return
+    }
+
+    if (newReply) {
+      // 2. Update the screen instantly
+      setReplies(p => [...p, newReply])
+      setReplyInputs(p => ({ ...p, [announcementId]: '' }))
+
+      // 3. Real-time notification to the original author
+      const originalAnnouncement = announcements.find(a => a.id === announcementId)
+      
+      if (originalAnnouncement && originalAnnouncement.author_id !== user.id) {
+        await supabase.from('notifications').insert({
+          user_id: originalAnnouncement.author_id,
+          actor_id: user.id,
+          actor_name: `${profile.first_name} ${profile.last_name}`,
+          type: 'reply',
+          title: 'New Reply',
+          message: `${profile.first_name} ${profile.last_name} replied to your announcement.`
+        })
+      }
+    }
   }
 
   const handleSaveSettings = async () => {
     if (!activeEnsemble) return
-    await supabase.from('ensembles').update({ announcement_permission: editPerm, announcement_reply_permission: editReplyPerm }).eq('id', activeEnsemble.id)
-    setActiveEnsemble({ ...activeEnsemble, announcement_permission: editPerm, announcement_reply_permission: editReplyPerm })
+    const trimmedName = editEnsName.trim()
+    if (!trimmedName) {
+      alert("Ensemble name cannot be empty.")
+      return
+    }
+
+    setIsSavingSettings(true)
+    setSettingsFeedback('Saving...')
+
+    const { error } = await supabase
+      .from('ensembles')
+      .update({ 
+        name: trimmedName,
+        announcement_permission: editPerm, 
+        announcement_reply_permission: editReplyPerm 
+      })
+      .eq('id', activeEnsemble.id)
+
+    setIsSavingSettings(false)
+
+    if (error) {
+      alert("Error saving settings: " + error.message)
+      setSettingsFeedback('')
+      return
+    }
+
+    setActiveEnsemble({ 
+      ...activeEnsemble, 
+      name: trimmedName,
+      announcement_permission: editPerm, 
+      announcement_reply_permission: editReplyPerm 
+    })
     setSettingsFeedback('✅ Ensemble settings saved!')
     setTimeout(() => setSettingsFeedback(''), 3000)
   }
@@ -545,10 +654,23 @@ export default function EnsemblesView({
 
         {ensembleTab === 'ensemble_settings' && activeEnsemble.role === 'director' && (
           <div className="max-w-xl animate-in fade-in duration-300">
-             <div className="p-8 rounded-2xl bg-gradient-to-b from-slate-900/60 to-slate-900/30 border border-slate-800 space-y-6">
-              <h1 className="text-2xl font-bold text-white">Global Permissions</h1>
+            <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-slate-900/60 to-slate-900/30 border border-slate-800 space-y-6">
+              <h1 className="text-2xl font-bold text-white">Director Controls</h1>
+              
               <div className="space-y-4">
                 <div>
+                  <label className="text-sm font-medium text-slate-400 block mb-2">Ensemble Name</label>
+                  <input 
+                    type="text" 
+                    value={editEnsName} 
+                    onChange={e => setEditEnsName(e.target.value)} 
+                    placeholder="e.g. Symphonic Orchestra"
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition" 
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80">
                   <label className="text-sm font-medium text-slate-400 block mb-2">Who can post announcements?</label>
                   <select value={editPerm} onChange={e => setEditPerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
                     <option value="directors_only">Directors Only</option>
@@ -556,6 +678,7 @@ export default function EnsemblesView({
                     <option value="everyone">Everyone</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="text-sm font-medium text-slate-400 block mb-2">Who can reply?</label>
                   <select value={editReplyPerm} onChange={e => setEditReplyPerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500 transition">
@@ -566,8 +689,20 @@ export default function EnsemblesView({
                   </select>
                 </div>
               </div>
-              <button onClick={handleSaveSettings} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition cursor-pointer">Save Settings</button>
-              {settingsFeedback && <p className="text-sm font-medium text-emerald-400 text-center animate-in fade-in duration-300">{settingsFeedback}</p>}
+
+              <button 
+                onClick={handleSaveSettings} 
+                disabled={isSavingSettings || !editEnsName.trim()} 
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-lg transition cursor-pointer"
+              >
+                {isSavingSettings ? 'Saving...' : 'Save Settings'}
+              </button>
+              
+              {settingsFeedback && (
+                <p className="text-sm font-medium text-emerald-400 text-center animate-in fade-in duration-300">
+                  {settingsFeedback}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -707,7 +842,6 @@ export default function EnsemblesView({
                         const override = pieceAssignments.find(pa => pa.piece_id === selectedPieceForParts.id && pa.user_id === student.user_id)
                         const defaultInstLabel = COMMON_INSTRUMENTS.find(i => i.id === student.section)?.name || student.section
 
-                        // Read from draft state if exists, otherwise fallback to database state
                         const currentVal = draftOverrides[student.user_id] !== undefined ? draftOverrides[student.user_id] : (override ? override.instrument : '')
                         
                         const showOverrideStyle = override && isTrueOverride(student.section, override.instrument);

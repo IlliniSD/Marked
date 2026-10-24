@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import type { User } from '@supabase/supabase-js'
-import type { Ensemble, Profile, NotificationItem, FriendDetail } from '../types'
+import type { Ensemble, Profile, FriendDetail } from '../types'
 
 import Navigation from './Navigation'
 import EnsemblesView from './EnsemblesView'
@@ -13,6 +13,8 @@ import FriendsView from './FriendsView'
 import NotificationsModal from './NotificationsModal'
 import PracticeRoomView from './PracticeRoomView'
 import EnsembleModal from './EnsembleModal'
+
+import { useRealtimeNotifications } from '../useRealtimeNotifications'
 
 interface WorkspaceProps {
   session: User
@@ -38,14 +40,21 @@ export default function Workspace({ session }: WorkspaceProps) {
   // Data States
   const [friendsList, setFriendsList] = useState<FriendDetail[]>([])
   const [friendsLoading, setFriendsLoading] = useState(false)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+
+  // REAL-TIME ENGINE: Automatically listens to the database and manages the badge count
+  const { notifications, unreadCount } = useRealtimeNotifications(session.id)
 
   useEffect(() => {
     fetchUserData()
     fetchFriends()
-    fetchNotifications()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Keep the ensembles dropdown list in sync if activeEnsemble is renamed or updated
+  useEffect(() => {
+    if (!activeEnsemble) return
+    setEnsembles(prev => prev.map(e => e.id === activeEnsemble.id ? activeEnsemble : e))
+  }, [activeEnsemble])
 
   const fetchUserData = async () => {
     const { data: profData } = await supabase.from('profiles').select('*').eq('id', session.id).single()
@@ -69,13 +78,9 @@ export default function Workspace({ session }: WorkspaceProps) {
     setFriendsLoading(false)
   }
 
-  const fetchNotifications = async () => {
-    const { data } = await supabase.from('notifications').select('*').eq('user_id', session.id).order('created_at', { ascending: false })
-    if (data) setNotifications(data)
-  }
-
   const handleAcceptFriend = async (friendshipId: string, requesterId: string) => {
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId)
+    
     await supabase.from('notifications').insert({ 
       user_id: requesterId, 
       actor_id: session.id, 
@@ -91,8 +96,6 @@ export default function Workspace({ session }: WorkspaceProps) {
     await supabase.from('friendships').delete().eq('id', friendshipId)
     fetchFriends()
   }
-
-  const unreadCount = notifications.filter(n => !n.is_read).length
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-indigo-500/30">
@@ -180,10 +183,7 @@ export default function Workspace({ session }: WorkspaceProps) {
       {isInboxOpen && (
         <NotificationsModal 
           notifications={notifications} 
-          onClose={() => {
-            setIsInboxOpen(false)
-            fetchNotifications()
-          }} 
+          onClose={() => setIsInboxOpen(false)} 
         />
       )}
     </div>

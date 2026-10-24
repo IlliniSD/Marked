@@ -23,11 +23,13 @@ export interface Piece {
 }
 
 export interface Announcement {
-  id: string
-  title: string
-  content: string
-  author_name: string
-  created_at: string
+  id: string;
+  ensemble_id: string;
+  author_id: string; // <-- Add this line!
+  author_name: string;
+  title: string;
+  content: string;
+  created_at: string;
 }
 
 export interface AnnouncementReply {
